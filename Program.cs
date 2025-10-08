@@ -11,8 +11,18 @@ MMMMPPPPMMPP
 MMPMPPPPMPPP
 PMPPPPSPPPPP
 PPPPPSWSPPPP
-PPSSSWWWSSPP
-SSSWWWWWWSSP";
+SSSSSWWWSSSS
+WWWWWWWWWWWW";
+
+sampleText = @"
+MMMMMPPPPMMM
+MMMPPSPPMMMM
+MMPSSWSPMMMM
+MMPPSWWSPMMM
+MMPSWWWSPPPM
+MMPSSSSSSPMM
+MMMPPPPPPPMM
+MMMMMMMMMMMM";
 
 // Create a unique list of tile types
 List<char> tileTypes = [];
@@ -90,14 +100,18 @@ foreach (Probability probability in probabilities)
     Console.WriteLine($"  Left: {string.Join(", ", probability.Left.Select(kv => $"{kv.Key}:{kv.Value}"))}");
 }
 
+
+
 // Create a game array and populate it with random tiles based on the probabilities
-int gameWidth = 10;
+int gameWidth = 20;
 int gameHeight = 10;
 var totalTiles = gameWidth * gameHeight;
 var settledTiles = 0;
 
 char[,] game = new char[gameHeight, gameWidth];
-Probability[,] gameProbabilities = new Probability[gameHeight, gameWidth];
+// This will hold the calculated probabilities for each cell in the game array
+// Create a two dimensional array of Dictionary<char, int> called gameProbabilities 
+Dictionary<char, int>[,] gameProbabilities = new Dictionary<char, int>[gameHeight, gameWidth];
 Random rand = new Random();
 
 // Initialize game array with null characters to indicate unsettled tiles
@@ -106,6 +120,11 @@ for (int y = 0; y < gameHeight; y++)
     for (int x = 0; x < gameWidth; x++)
     {
         game[y, x] = '\0'; // Null character indicates unsettled
+        gameProbabilities[y, x] = new Dictionary<char, int>();
+        foreach (var type in tileTypes)
+        {
+            gameProbabilities[y, x][type] = 0; // Initialize all probabilities to 0
+        }
     }
 }
 
@@ -119,73 +138,65 @@ do
         {
             if (game[y, x] == '\0') // Only calculate for unsettled tiles
             {
-                gameProbabilities[y, x] = new Probability('\0', tileTypes);
-                
-                // Calculate valid tile types based on neighbors
-                foreach (var tileType in tileTypes)
+                // Calculate the cell's probabilities based on its neighbors
+                var cellProbabilities = new Dictionary<char, int>();
+                foreach (var type in tileTypes)
                 {
-                    var probability = probabilities.First(p => p.Type == tileType);
-                    int totalCompatibility = 0;
-
-                    // Check compatibility with top neighbor
-                    if (y > 0)
-                    {
-                        char topNeighbor = game[y - 1, x];
-                        if (topNeighbor != '\0')
-                        {
-                            totalCompatibility += probability.Top[topNeighbor];
-                        }
-                        else
-                        {
-                            totalCompatibility += probability.Top.Values.Sum();
-                        }
-                    }
-
-                    // Check compatibility with right neighbor
-                    if (x < gameWidth - 1)
-                    {
-                        char rightNeighbor = game[y, x + 1];
-                        if (rightNeighbor != '\0')
-                        {
-                            totalCompatibility += probability.Right[rightNeighbor];
-                        }
-                        else
-                        {
-                            totalCompatibility += probability.Right.Values.Sum();
-                        }
-                    }
-
-                    // Check compatibility with bottom neighbor
-                    if (y < gameHeight - 1)
-                    {
-                        char bottomNeighbor = game[y + 1, x];
-                        if (bottomNeighbor != '\0')
-                        {
-                            totalCompatibility += probability.Bottom[bottomNeighbor];
-                        }
-                        else
-                        {
-                            totalCompatibility += probability.Bottom.Values.Sum();
-                        }
-                    }
-
-                    // Check compatibility with left neighbor
-                    if (x > 0)
-                    {
-                        char leftNeighbor = game[y, x - 1];
-                        if (leftNeighbor != '\0')
-                        {
-                            totalCompatibility += probability.Left[leftNeighbor];
-                        }
-                        else
-                        {
-                            totalCompatibility += probability.Left.Values.Sum();
-                        }
-                    }
-
-                    // Store the compatibility score for this tile type at this position
-                    gameProbabilities[y, x].Top[tileType] = totalCompatibility;
+                    cellProbabilities[type] = 0; // Initialize all probabilities to 0
                 }
+                // Check top neighbor
+                if (y > 0 && game[y - 1, x] != '\0')
+                {
+                    char topType = game[y - 1, x];
+                    var topProb = probabilities.First(p => p.Type == topType);
+                    foreach (var kv in topProb.Bottom)
+                    {
+                        if (kv.Value == 0) cellProbabilities[kv.Key] = int.MinValue;
+                        else cellProbabilities[kv.Key] += kv.Value;
+                    }
+                }
+                // Check right neighbor
+                if (x < gameWidth - 1 && game[y, x + 1] != '\0')
+                {
+                    char rightType = game[y, x + 1];
+                    var rightProb = probabilities.First(p => p.Type == rightType);
+                    foreach (var kv in rightProb.Left)
+                    {
+                        if (kv.Value == 0) cellProbabilities[kv.Key] = int.MinValue;
+                        else cellProbabilities[kv.Key] += kv.Value;
+                    }
+                }
+                // Check bottom neighbor
+                if (y < gameHeight - 1 && game[y + 1, x] != '\0')
+                {
+                    char bottomType = game[y + 1, x];
+                    var bottomProb = probabilities.First(p => p.Type == bottomType);
+                    foreach (var kv in bottomProb.Top)
+                    {
+                        if (kv.Value == 0) cellProbabilities[kv.Key] = int.MinValue;
+                        else cellProbabilities[kv.Key] += kv.Value;
+                    }
+                }
+                // Check left neighbor
+                if (x > 0 && game[y, x - 1] != '\0')
+                {
+                    char leftType = game[y, x - 1];
+                    var leftProb = probabilities.First(p => p.Type == leftType);
+                    foreach (var kv in leftProb.Right)
+                    {
+                        if (kv.Value == 0) cellProbabilities[kv.Key] = int.MinValue;
+                        else cellProbabilities[kv.Key] += kv.Value;
+                    }
+                }
+                // Set any negative probabilities to zero
+                foreach (var type in tileTypes)
+                {
+                    if (cellProbabilities[type] < 0)
+                    {
+                        cellProbabilities[type] = 0;
+                    }
+                }
+                gameProbabilities[y, x] = cellProbabilities;
             }
         }
     }
@@ -200,10 +211,16 @@ do
         {
             if (game[y, x] == '\0') // Only consider unsettled tiles
             {
-                var validOptions = gameProbabilities[y, x].Top.Where(kv => kv.Value > 0).Count();
-                if (validOptions > 0 && validOptions < minEntropy)
+                int entropy = gameProbabilities[y, x].Values.Sum();
+                if (entropy == 0 && minEntropy == int.MaxValue )
                 {
-                    minEntropy = validOptions;
+                    bestY = y;
+                    bestX = x;
+                    minEntropy = int.MaxValue - 1;
+                }
+                else if (entropy > 0 && entropy < minEntropy)
+                {
+                    minEntropy = entropy;
                     bestY = y;
                     bestX = x;
                 }
@@ -214,23 +231,22 @@ do
     // Settle that cell to a specific tile type based on the calculated probabilities
     if (bestY != -1 && bestX != -1)
     {
-        var cellProbabilities = gameProbabilities[bestY, bestX].Top
-            .Where(kv => kv.Value > 0)
-            .ToList();
-
-        if (cellProbabilities.Any())
+        var cellProbabilities = gameProbabilities[bestY, bestX];
+        int totalProbability = cellProbabilities.Values.Sum();
+        if (totalProbability > 0)
         {
-            // Weighted random selection based on compatibility scores
-            int totalWeight = cellProbabilities.Sum(kv => kv.Value);
-            int randomValue = rand.Next(totalWeight);
-            int currentWeight = 0;
-
-            foreach (var kvp in cellProbabilities)
+            int randomValue = rand.Next(totalProbability);
+            int cumulative = 0;
+            foreach (var kv in cellProbabilities)
             {
-                currentWeight += kvp.Value;
-                if (randomValue < currentWeight)
+                cumulative += kv.Value;
+                if (randomValue < cumulative)
                 {
-                    game[bestY, bestX] = kvp.Key;
+                    if (kv.Key == 'W')
+                    {
+                        //Console.WriteLine("Here");
+                    }
+                    game[bestY, bestX] = kv.Key;
                     settledTiles++;
                     break;
                 }
@@ -238,8 +254,42 @@ do
         }
         else
         {
-            // Fallback: choose a random tile type if no valid options
-            game[bestY, bestX] = tileTypes[rand.Next(tileTypes.Count)];
+            // If all probabilities are zero, Set to most common value around it
+            var neighborTypes = new List<char>();
+            // Check top neighbor
+            if (bestY > 0 && game[bestY - 1, bestX] != '\0')
+            {
+                neighborTypes.Add(game[bestY - 1, bestX]);
+            }
+            // Check right neighbor
+            if (bestX < gameWidth - 1 && game[bestY, bestX + 1] != '\0')
+            {
+                neighborTypes.Add(game[bestY, bestX + 1]);
+            }
+            // Check bottom neighbor
+            if (bestY < gameHeight - 1 && game[bestY + 1, bestX] != '\0')
+            {
+                neighborTypes.Add(game[bestY + 1, bestX]);
+            }
+            // Check left neighbor
+            if (bestX > 0 && game[bestY, bestX - 1] != '\0')
+            {
+                neighborTypes.Add(game[bestY, bestX - 1]);
+            }
+            if (neighborTypes.Count > 0)
+            {
+                var mostCommon = neighborTypes
+                    .GroupBy(t => t)
+                    .OrderByDescending(g => g.Count())
+                    .First()
+                    .Key;
+                game[bestY, bestX] = mostCommon;
+            }
+            else
+            {
+                // If no neighbors are settled, settle randomly
+                game[bestY, bestX] = tileTypes[rand.Next(tileTypes.Count)];
+            }
             settledTiles++;
         }
     }
@@ -258,16 +308,44 @@ do
             }
         }
     }
-
+    PrintGame();
 } while (settledTiles < totalTiles);
 
-// Print the generated game grid
-Console.WriteLine("\nGenerated Game Grid:");
-for (int y = 0; y < gameHeight; y++)
+PrintGame();
+
+void PrintGame()
 {
-    for (int x = 0; x < gameWidth; x++)
+    Console.Clear();
+    // Print the generated game grid
+    Console.WriteLine("\nGenerated Game Grid:");
+    for (int y = 0; y < gameHeight; y++)
     {
-        Console.Write(game[y, x]);
+        for (int x = 0; x < gameWidth; x++)
+        {
+            // Color the output: Make W White, P Green, S Brown, W Green
+            switch (game[y, x])
+            {
+                case 'M':
+                    Console.ForegroundColor = ConsoleColor.Gray;
+                    break;
+                case 'P':
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    break;
+                case 'S':
+                    Console.ForegroundColor = ConsoleColor.DarkYellow;
+                    break;
+                case 'W':
+                    Console.ForegroundColor = ConsoleColor.Blue;
+                    break;
+                default:
+                    Console.ForegroundColor = ConsoleColor.Gray;
+                    break;
+            }
+            if (game[y,x] == '\0') Console.Write('.');
+            else Console.Write(game[y, x]);
+
+
+        }
+        Console.WriteLine();
     }
-    Console.WriteLine();
 }
